@@ -1,42 +1,33 @@
 Function Find-ServiceUser {
     [CmdletBinding()]
     param (
-        [parameter(mandatory = $true, position = 0)]
+        [parameter(mandatory,ValueFromPipelineByPropertyName,position = 0)]
         [string[]]
-        $computer,
+        $ComputerName,
 
-        [parameter(mandatory = $false, position = 1)]
-        [string]
-        $user,
+        [parameter(position = 1)]
+        [string[]]
+        $User,
 
-        [parameter(Mandatory = $false, HelpMessage = 'Turns on the search after the exact username.')]
+        [parameter(HelpMessage = 'Turns on the search after the exact username.')]
         [switch]
         $Strict
     )
-    $user = $user.trim()
-    $computer = $computer.trim()
-    if ([bool](Test-Connection -ComputerName $computer -Count 1 -ErrorAction SilentlyContinue)) {
-        if ($Strict) {
-            $filter = "startname = '$($user)'"
-            #Write-Information $filter -InformationAction Continue
-        } else {
-            $filter = "startname LIKE '%$($user)%'"
+
+    begin {
+        $filterString = if ($Strict.IsPresent){
+            'StartName Like "%{0}%"'
         }
-        Write-Verbose -Message "WMI query for system services."
-        try {
-            $service_ = Get-CimInstance -classname win32_service -filter "$filter" -ComputerName $computer -ErrorAction Stop
-        } 
-        catch {
-            Write-Error -Message "Failed WMI query for system services with Service Logon Account as ""$user"": $_"
+        else {
+            'Startname = "{0}"'
         }
-        if ($service_) {
-            Write-Verbose -Message "Return WMI query data"
-            return $service_
-        } 
+
+        $cimParam = @{
+            Filter = $User.ForEach({ $filterString -f $PSItem.trim() }) -join ' OR '
+        }
     }
-    else {
-        Write-Verbose -Message "$computer`: Connection failed!"
-        Write-Information -MessageData "$computer`: Connection failed!" -InformationAction Continue
-        return $null
+
+    process {
+        Get-CimInstance -ComputerName $ComputerName @cimParam
     }
-}# end function Find-ServiceUser
+}
